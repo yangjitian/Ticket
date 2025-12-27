@@ -1,0 +1,203 @@
+<template>
+  <div class="admin-layout">
+    <!-- 侧边栏 -->
+    <el-aside width="200px" class="admin-sidebar">
+      <div class="sidebar-header">
+        <h3>管理员后台</h3>
+      </div>
+      <el-menu
+        :default-active="activeMenu"
+        class="admin-menu"
+        @select="handleMenuSelect"
+      >
+        <el-menu-item index="dashboard">
+          <el-icon><House /></el-icon>
+          <span>控制台</span>
+        </el-menu-item>
+        <el-menu-item index="user-management">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
+        <el-menu-item index="scenic-management">
+          <el-icon><Location /></el-icon>
+          <span>景区管理</span>
+        </el-menu-item>
+        <el-menu-item index="distributor-management">
+          <el-icon><Shop /></el-icon>
+          <span>经销商管理</span>
+        </el-menu-item>
+        <el-menu-item index="ticket-inventory">
+          <el-icon><Tickets /></el-icon>
+          <span>门票库存管理</span>
+        </el-menu-item>
+      </el-menu>
+    </el-aside>
+
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 头部 -->
+      <el-header class="admin-header">
+        <div class="header-left">
+          <span class="welcome-text">欢迎您，管理员</span>
+        </div>
+        <div class="header-right">
+          <el-button type="text" @click="handleLogout">
+            <el-icon><SwitchButton /></el-icon>
+            退出登录
+          </el-button>
+        </div>
+      </el-header>
+
+      <!-- 内容区域 -->
+      <el-main class="admin-main">
+        <router-view />
+      </el-main>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  House,
+  User,
+  Location,
+  Shop,
+  Tickets,
+  SwitchButton
+} from '@element-plus/icons-vue'
+import { logout } from '@/admin/api'
+
+const router = useRouter()
+const route = useRoute()
+
+// 当前激活的菜单
+const activeMenu = ref('dashboard')
+
+// 监听路由变化更新菜单激活状态
+onMounted(() => {
+  console.log('AdminLayout onMounted, current route:', route.path, route.fullPath)
+  const path = route.path
+  if (path.includes('user-management')) {
+    activeMenu.value = 'user-management'
+  } else if (path.includes('scenic-management')) {
+    activeMenu.value = 'scenic-management'
+  } else if (path.includes('distributor-management')) {
+    activeMenu.value = 'distributor-management'
+  } else if (path.includes('ticket-inventory')) {
+    activeMenu.value = 'ticket-inventory'
+  } else {
+    activeMenu.value = 'dashboard'
+  }
+  console.log('activeMenu set to:', activeMenu.value)
+})
+
+// 菜单选择处理
+const handleMenuSelect = (index: string) => {
+  activeMenu.value = index
+  switch (index) {
+    case 'dashboard':
+      router.push('/admin/dashboard')
+      break
+    case 'user-management':
+      router.push('/admin/user-management')
+      break
+    case 'scenic-management':
+      router.push('/admin/scenic-management')
+      break
+    case 'distributor-management':
+      router.push('/admin/distributor-management')
+      break
+    case 'ticket-inventory':
+      router.push('/admin/ticket-inventory')
+      break
+  }
+}
+
+// 退出登录
+const handleLogout = async () => {
+  try {
+    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    await logout()
+
+    // 清除本地存储
+    localStorage.removeItem('token')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('user')
+
+    ElMessage.success('退出登录成功')
+
+    // 跳转到登录页
+    router.push('/admin/login')
+  } catch (error) {
+    // 用户取消操作或API调用失败
+    if (error !== 'cancel') {
+      console.error('退出登录失败:', error)
+      // 即使API调用失败，也清除本地存储并跳转
+      localStorage.removeItem('token')
+      localStorage.removeItem('userRole')
+      localStorage.removeItem('user')
+      router.push('/admin/login')
+    }
+  }
+}
+</script>
+
+<style scoped>
+.admin-layout {
+  height: 100vh;
+  display: flex;
+}
+
+.admin-sidebar {
+  background-color: #f5f5f5;
+  border-right: 1px solid #e6e6e6;
+}
+
+.sidebar-header {
+  padding: 20px;
+  text-align: center;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.admin-menu {
+  border-right: none;
+}
+
+.admin-header {
+  background-color: #fff;
+  border-bottom: 1px solid #e6e6e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.welcome-text {
+  color: #666;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-main {
+  flex: 1;
+  padding: 20px;
+  background-color: #f5f5f5;
+}
+</style>
