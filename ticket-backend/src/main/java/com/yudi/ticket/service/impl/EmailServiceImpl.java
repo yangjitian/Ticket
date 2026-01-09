@@ -28,6 +28,7 @@ public class EmailServiceImpl implements EmailService {
 
     private static final String EMAIL_CODE_KEY = "reg:code";
     private static final String RESET_PASSWORD_CODE_KEY = "reset:code";
+    private static final String CHANGE_EMAIL_CODE_KEY = "email:change";
 
     @Override
     public void sendRegisterCode(String email) {
@@ -39,7 +40,7 @@ public class EmailServiceImpl implements EmailService {
         String subject = "【聆音止梦景区售票】注册验证码";
         String content = "您好！您的验证码为：" + code + "，有效期5分钟。若非本人操作请忽略，切勿泄露！";
         sendEmail(email, subject, content);
-        log.info("验证码{},邮件已发送至 {}",code, email);
+        log.info("验证码 {},邮件已发送至 {}",code, email);
     }
 
     @Override
@@ -61,6 +62,19 @@ public class EmailServiceImpl implements EmailService {
         String content = "您好！您的经销商资格审核已通过，现在可以登录系统进行业务操作了。";
         sendEmail(email, subject, content);
         log.info("审核通过通知邮件已发送至 {}", email);
+    }
+
+    @Override
+    public void sendChangeCode(String email) {
+        // 1.生成验证码 存入Redis 5分钟过期
+        String code = RandomUtil.randomNumbers(6);
+        String codeKey = CHANGE_EMAIL_CODE_KEY + ":" + email;
+        stringRedisTemplate.opsForValue().set(codeKey, code, 5, TimeUnit.MINUTES);
+        // 2.异步发送邮件
+        String subject = "【聆音止梦景区售票】邮箱换绑验证码";
+        String content = "您好！您正在进行邮箱换绑操作，验证码为：" + code + "，有效期5分钟。若非本人操作请忽略，切勿泄露！";
+        sendEmail(email, subject, content);
+        log.info("邮箱换绑验证码{},邮件已发送至 {}", code, email);
     }
 
     @Async

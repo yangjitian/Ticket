@@ -2,23 +2,23 @@ package com.yudi.ticket.controller;
 
 import cn.hutool.core.util.StrUtil;
 import com.yudi.ticket.aop.RequireAdmin;
+import com.yudi.ticket.aop.RequireLogin;
 import com.yudi.ticket.common.BaseResponse;
 import com.yudi.ticket.common.ErrorCode;
 import com.yudi.ticket.common.ThrowUtils;
 import com.yudi.ticket.model.dto.*;
 import com.yudi.ticket.model.dto.UserAuditRequest;
-import com.yudi.ticket.model.enums.UserType;
+import com.yudi.ticket.common.PageResponse;
+import com.yudi.ticket.model.vo.UserVO;
+import com.yudi.ticket.model.vo.UserStatsVO;
+import com.yudi.ticket.model.vo.DistributorVO;
 import com.yudi.ticket.model.vo.UserLoginVO;
 import com.yudi.ticket.service.UserService;
 import com.yudi.ticket.utils.JwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -59,24 +59,34 @@ public class UserController {
     public BaseResponse<Boolean> logout(HttpServletRequest request) {
         String token = getToken(request);
         Long userId = JwtUtils.getUserId(token);
-        // 校验 Redis 状态
-        boolean isLoggedIn = userService.checkLoginStatus(userId, token);
-        ThrowUtils.throwIf(!isLoggedIn, ErrorCode.UNAUTHORIZED, "登录已失效");
         
+        // 将token加入黑名单，彻底销毁
+        userService.addTokenToBlacklist(token);
         userService.userLogout(userId);
         return BaseResponse.success(true);
+    }
+
+    /**
+     * 获取当前用户信息
+     */
+    @PostMapping("/current")
+    @RequireLogin
+    public BaseResponse<UserLoginVO> getCurrentUser(HttpServletRequest request) {
+        String token = getToken(request);
+        Long userId = JwtUtils.getUserId(token);
+
+        UserLoginVO userLoginVO = userService.getCurrentUser(userId, token);
+        return BaseResponse.success(userLoginVO);
     }
 
     /**
      * 更新用户头像
      */
     @PostMapping("/update/avatar")
+    @RequireLogin
     public BaseResponse<String> updateAvatar(@RequestPart("file") MultipartFile multipartFile, HttpServletRequest request) {
         String token = getToken(request);
         Long userId = JwtUtils.getUserId(token);
-        // 校验 Redis 状态
-        boolean isLoggedIn = userService.checkLoginStatus(userId, token);
-        ThrowUtils.throwIf(!isLoggedIn, ErrorCode.UNAUTHORIZED);
 
         String url = userService.updateAvatar(multipartFile, userId);
         return BaseResponse.success(url);
@@ -86,10 +96,10 @@ public class UserController {
      * 更新个人信息
      */
     @PostMapping("/update/my")
+    @RequireLogin
     public BaseResponse<Boolean> updateMyInfo(@RequestBody UserUpdateRequest userUpdateRequest, HttpServletRequest request) {
         String token = getToken(request);
         Long userId = JwtUtils.getUserId(token);
-        ThrowUtils.throwIf(userId == null, ErrorCode.UNAUTHORIZED);
 
         userService.updateMyInfo(userUpdateRequest, userId);
         return BaseResponse.success(true);
@@ -99,12 +109,25 @@ public class UserController {
      * 修改密码
      */
     @PostMapping("/update/password")
+    @RequireLogin
     public BaseResponse<Boolean> updatePassword(@RequestBody UserUpdatePasswordRequest userUpdatePasswordRequest, HttpServletRequest request) {
         String token = getToken(request);
         Long userId = JwtUtils.getUserId(token);
-        ThrowUtils.throwIf(userId == null, ErrorCode.UNAUTHORIZED);
 
         userService.updatePassword(userUpdatePasswordRequest, userId);
+        return BaseResponse.success(true);
+    }
+
+    /**
+     * 换绑邮箱
+     */
+    @PostMapping("/change-email")
+    @RequireLogin
+    public BaseResponse<Boolean> changeEmail(@RequestBody UserChangeEmailRequest userChangeEmailRequest, HttpServletRequest request) {
+        String token = getToken(request);
+        Long userId = JwtUtils.getUserId(token);
+
+        userService.changeEmail(userChangeEmailRequest, userId);
         return BaseResponse.success(true);
     }
 
@@ -149,6 +172,49 @@ public class UserController {
         ThrowUtils.throwIf(userAuditRequest == null, ErrorCode.PARAM_ERROR);
         userService.auditDistributor(userAuditRequest);
         return BaseResponse.success(true);
+    }
+
+    /**
+     * 分页查询用户列表（管理员）
+     */
+    @PostMapping("/list")
+    @RequireAdmin
+    public BaseResponse<PageResponse<UserVO>> listUsers(@RequestBody UserQueryRequest userQueryRequest) {
+        ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAM_ERROR);
+        PageResponse<UserVO> pageResponse = userService.listUsers(userQueryRequest);
+        return BaseResponse.success(pageResponse);
+    }
+
+    /**
+     * 获取用户注册统计数据（管理员）
+     */
+    @PostMapping("/stats")
+    @RequireAdmin
+    public BaseResponse<UserStatsVO> getUserStats(@RequestBody UserStatsRequest userStatsRequest) {
+        UserStatsVO userStatsVO = userService.getUserStats(userStatsRequest);
+        return BaseResponse.success(userStatsVO);
+    }
+
+    /**
+     * 分页查询经销商列表（管理员）
+     */
+    @PostMapping("/distributor/list")
+    @RequireAdmin
+    public BaseResponse<PageResponse<DistributorVO>> listDistributors(@RequestBody UserQueryRequest userQueryRequest) {
+        ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAM_ERROR);
+        PageResponse<DistributorVO> pageResponse = userService.listDistributors(userQueryRequest);
+        return BaseResponse.success(pageResponse);
+    }
+
+    /**
+     * 获取经销商统计数据（管理员）
+     */
+    @GetMapping("/distributor/stats/{distributorId}")
+    @RequireAdmin
+    public BaseResponse<DistributorVO> getDistributorStats(@PathVariable Long distributorId) {
+        ThrowUtils.throwIf(distributorId == null, ErrorCode.PARAM_ERROR);
+        DistributorVO distributorVO = userService.getDistributorStats(distributorId);
+        return BaseResponse.success(distributorVO);
     }
 
     /**

@@ -60,8 +60,7 @@
         <!-- 返回首页 -->
         <div class="back-home">
           <router-link to="/" class="back-link">
-            <el-icon><Home /></el-icon>
-            返回首页
+            🏠 返回首页
           </router-link>
         </div>
       </div>
@@ -73,7 +72,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Message, Lock, Home } from '@element-plus/icons-vue'
+import { Message, Lock } from '@element-plus/icons-vue'
 import { userLogin } from '@/user/api'
 
 const router = useRouter()
@@ -87,8 +86,7 @@ const loginForm = reactive({
 // 表单验证规则
 const loginRules = {
   userAccount: [
-    { required: true, message: '请输入邮箱账号', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+    { required: true, message: '请输入邮箱账号', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -112,14 +110,22 @@ const handleLogin = async () => {
     const response = await userLogin(loginForm.userAccount, loginForm.password)
 
     if (response.data.code === 200) {
-      const { token, user } = response.data.data
+      const userData = response.data.data // UserLoginVO对象
 
-      // 保存登录信息
-      localStorage.setItem('token', token)
-      localStorage.setItem('user', JSON.stringify(user))
-      localStorage.setItem('userRole', user.role.toString())
+      // 保存用户登录信息到localStorage (使用user_前缀)
+      localStorage.setItem('user_token', userData.token)
+      // 移除token后保存用户信息
+      const userInfo = { ...userData }
+      delete userInfo.token
+      localStorage.setItem('user_user', JSON.stringify(userInfo))
+      localStorage.setItem('user_userRole', userData.role.toString())
 
       ElMessage.success('登录成功')
+
+      // 检查是否是经销商且审核状态为待审核
+      if (userInfo.role === 2 && userInfo.auditStatus === 0) {
+        ElMessage.info('您的经销商申请正在审核中，请耐心等待')
+      }
 
       // 跳转到首页
       router.push('/')
@@ -127,6 +133,7 @@ const handleLogin = async () => {
       ElMessage.error(response.data.message || '登录失败')
     }
   } catch (error: any) {
+    console.error('登录异常:', error)
     if (error.response?.data?.message) {
       ElMessage.error(error.response.data.message)
     } else {

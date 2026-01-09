@@ -255,7 +255,23 @@ const successDialog = ref(false)
 const orderNumber = ref('')
 
 // 初始化订单信息
+// 检查登录状态
+const checkLoginStatus = () => {
+  const token = localStorage.getItem('user_token')
+  if (!token) {
+    ElMessage.warning('请先登录')
+    router.push('/login')
+    return false
+  }
+  return true
+}
+
 const initOrderInfo = () => {
+  // 先检查登录状态
+  if (!checkLoginStatus()) {
+    return
+  }
+
   const orderData = route.query.data as string
   if (orderData) {
     try {

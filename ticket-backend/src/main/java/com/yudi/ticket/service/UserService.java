@@ -5,9 +5,16 @@ import com.yudi.ticket.model.dto.UserLoginRequest;
 import com.yudi.ticket.model.dto.UserUpdateRequest;
 import com.yudi.ticket.model.dto.UserRecoverPasswordRequest;
 import com.yudi.ticket.model.dto.UserUpdatePasswordRequest;
+import com.yudi.ticket.model.dto.UserChangeEmailRequest;
 import com.yudi.ticket.model.dto.UserDeleteRequest;
 import com.yudi.ticket.model.dto.UserAuditRequest;
 import com.yudi.ticket.model.dto.UserStatusUpdateRequest;
+import com.yudi.ticket.model.dto.UserQueryRequest;
+import com.yudi.ticket.model.dto.UserStatsRequest;
+import com.yudi.ticket.common.PageResponse;
+import com.yudi.ticket.model.vo.UserVO;
+import com.yudi.ticket.model.vo.UserStatsVO;
+import com.yudi.ticket.model.vo.DistributorVO;
 import com.yudi.ticket.model.vo.UserLoginVO;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,6 +38,15 @@ public interface UserService {
      * @return 用户登录视图信息
      */
     UserLoginVO userLogin(UserLoginRequest userLoginRequest);
+
+    /**
+     * 获取当前用户信息
+     *
+     * @param userId 用户ID
+     * @param currentToken 当前有效的token
+     * @return 用户登录视图信息
+     */
+    UserLoginVO getCurrentUser(Long userId, String currentToken);
 
     /**
      * 用户登出
@@ -74,6 +90,14 @@ public interface UserService {
     void updatePassword(UserUpdatePasswordRequest userUpdatePasswordRequest, Long userId);
 
     /**
+     * 换绑邮箱
+     *
+     * @param userChangeEmailRequest 换绑邮箱请求
+     * @param userId                 用户ID
+     */
+    void changeEmail(UserChangeEmailRequest userChangeEmailRequest, Long userId);
+
+    /**
      * 用户找回密码
      *
      * @param userRecoverPasswordRequest 找回密码请求
@@ -100,4 +124,51 @@ public interface UserService {
      * @param userAuditRequest
      */
     void auditDistributor(UserAuditRequest userAuditRequest);
+
+    /**
+     * 将token加入黑名单（登出时调用）
+     *
+     * @param token JWT token
+     */
+    void addTokenToBlacklist(String token);
+
+    /**
+     * 检查token是否在黑名单中
+     *
+     * @param token JWT token
+     * @return true如果在黑名单中
+     */
+    boolean isTokenInBlacklist(String token);
+
+    /**
+     * 分页查询用户列表
+     *
+     * @param userQueryRequest 查询请求
+     * @return 分页用户列表
+     */
+    PageResponse<UserVO> listUsers(UserQueryRequest userQueryRequest);
+
+    /**
+     * 获取用户注册统计数据
+     *
+     * @param userStatsRequest 统计请求
+     * @return 用户统计数据
+     */
+    UserStatsVO getUserStats(UserStatsRequest userStatsRequest);
+
+    /**
+     * 获取经销商列表（管理员）
+     *
+     * @param userQueryRequest 查询请求
+     * @return 经销商列表
+     */
+    PageResponse<DistributorVO> listDistributors(UserQueryRequest userQueryRequest);
+
+    /**
+     * 获取经销商统计数据（订单数、销售额、佣金）
+     *
+     * @param distributorId 经销商ID
+     * @return 经销商统计数据
+     */
+    DistributorVO getDistributorStats(Long distributorId);
 }

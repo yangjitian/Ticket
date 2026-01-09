@@ -50,7 +50,7 @@ CREATE TABLE `bus_ticket_product`
     `id`                      bigint         NOT NULL AUTO_INCREMENT,
     `spot_id`                 bigint         NOT NULL COMMENT '所属景区ID',
     `product_name`            varchar(100)   NOT NULL COMMENT '产品名称',
-    `ticket_type`             tinyint        NOT NULL COMMENT '票种类型: 1-成人, 2-儿童, 3-老人, 4-学生, 5-其他',
+    `ticket_type`             tinyint        NOT NULL COMMENT '默认票种类型: 1-原价票, 2-半价票, 3-免票',
     `price_retail`            decimal(10, 2) NOT NULL COMMENT '官网指导零售价（平台最高限价）',
     `price_settlement`        decimal(10, 2) NOT NULL COMMENT '平台结算价（分销商最低成本价，佣金计算基准）',
     `default_dist_sale_price` decimal(10, 2) DEFAULT NULL COMMENT '分销商默认销售价（NULL则使用price_retail）',
@@ -63,22 +63,21 @@ CREATE TABLE `bus_ticket_product`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='业务-门票产品表';
 
--- 4. 门票日历库存表 (bus_ticket_stock)
+-- 4. 景区日历库存表 (bus_scenic_stock)
 
-DROP TABLE IF EXISTS `bus_ticket_stock`;
-CREATE TABLE `bus_ticket_stock`
+DROP TABLE IF EXISTS `bus_scenic_stock`;
+CREATE TABLE `bus_scenic_stock`
 (
     `id`           bigint NOT NULL AUTO_INCREMENT,
-    `product_id`   bigint NOT NULL COMMENT '关联产品ID',
+    `scenic_id`    bigint NOT NULL COMMENT '关联景区ID',
     `stock_date`   date   NOT NULL COMMENT '库存日期',
     `total_qty`    int    NOT NULL DEFAULT '0' COMMENT '总库存量',
     `sold_qty`     int    NOT NULL DEFAULT '0' COMMENT '已售数量',
     `lock_version` int             DEFAULT '0' COMMENT '乐观锁版本',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_product_date` (`product_id`, `stock_date`)
+    UNIQUE KEY `uk_scenic_date` (`scenic_id`, `stock_date`)
 ) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4 COMMENT ='业务-门票日历库存表';
-
+  DEFAULT CHARSET = utf8mb4 COMMENT ='业务-景区日历库存表';
 
 -- 5. 订单主表 (bus_order)
 
@@ -153,3 +152,29 @@ ALTER TABLE bus_scenic_spot
 ADD COLUMN image_urls TEXT
     DEFAULT NULL
     COMMENT '景区图片URL数组(JSON格式)';
+
+ALTER TABLE `bus_scenic_spot`
+    ADD COLUMN `level`    VARCHAR(20)  DEFAULT NULL COMMENT '景区等级，如：5A、4A、国家级等' AFTER `spot_name`,
+    ADD COLUMN `province` VARCHAR(50)  DEFAULT NULL COMMENT '景区所属省份（如：浙江省、北京市）' AFTER `level`;
+
+-- 8. 新增：用户常用游客信息表（支持预填 + 默认票种）
+DROP TABLE IF EXISTS `user_visitor`;
+CREATE TABLE `user_visitor`
+(
+    `id`                  bigint      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`             bigint      NOT NULL COMMENT '所属用户ID',
+    `visitor_name`        varchar(32) NOT NULL COMMENT '游客姓名',
+    `id_card`             varchar(32) NOT NULL COMMENT '身份证号（建议加密存储）',
+    `contact_tel`         varchar(20) DEFAULT NULL COMMENT '联系电话（可选）',
+    `default_ticket_type` tinyint     DEFAULT '1' COMMENT '默认票种类型: 1-原价票, 2-半价票, 3-免票',
+    `is_default`          tinyint     DEFAULT '0' COMMENT '是否默认出行人：1-是，0-否',
+    `create_time`         datetime    DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`         datetime    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_deleted`          tinyint     DEFAULT '0' COMMENT '逻辑删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='用户常用游客信息表';
+
+-- 在 user 表添加分销商等级字段（仅对 role=2 分销商有效）
+ALTER TABLE `user`
+    ADD COLUMN `distributor_level` tinyint DEFAULT '3' COMMENT '分销商等级: 1-金（提成0.3倍官网价）, 2-银（0.25倍）, 3-铜（0.2倍）, NULL-不适用' AFTER `role`;

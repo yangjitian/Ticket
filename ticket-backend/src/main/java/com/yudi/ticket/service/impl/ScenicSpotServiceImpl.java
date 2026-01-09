@@ -130,6 +130,17 @@ public class ScenicSpotServiceImpl extends ServiceImpl<ScenicSpotMapper, ScenicS
             queryWrapper.like(ScenicSpot::getSpotName, request.getSpotName());
         }
 
+        // 等级精确查询
+        if (StrUtil.isNotBlank(request.getLevel())) {
+            queryWrapper.eq(ScenicSpot::getLevel, request.getLevel());
+        }
+
+        // 省份查询（使用模糊匹配，兼容带/不带“省/市/自治区”等后缀的写法）
+        if (StrUtil.isNotBlank(request.getProvince())) {
+            // 使用 like 匹配，避免存储时省份名称带不带后缀导致无法匹配
+            queryWrapper.like(ScenicSpot::getProvince, request.getProvince());
+        }
+
         // 地址模糊查询
         if (StrUtil.isNotBlank(request.getAddress())) {
             queryWrapper.like(ScenicSpot::getAddress, request.getAddress());

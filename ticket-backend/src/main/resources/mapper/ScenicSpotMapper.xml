@@ -7,6 +7,8 @@
     <resultMap id="BaseResultMap" type="com.yudi.ticket.model.entity.ScenicSpot">
             <id property="id" column="id" jdbcType="BIGINT"/>
             <result property="spotName" column="spot_name" jdbcType="VARCHAR"/>
+            <result property="level" column="level" jdbcType="VARCHAR"/>
+            <result property="province" column="province" jdbcType="VARCHAR"/>
             <result property="description" column="description" jdbcType="VARCHAR"/>
             <result property="address" column="address" jdbcType="VARCHAR"/>
             <result property="openTime" column="open_time" jdbcType="VARCHAR"/>
@@ -19,9 +21,9 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,spot_name,description,
+        id,spot_name,level,province,description,
         address,open_time,contact_num,
-        image_url,spot_status,create_time,
+        image_urls,spot_status,create_time,
         update_time,is_deleted
     </sql>
 </mapper>

@@ -29,6 +29,16 @@ public class ScenicSpot implements Serializable {
     private String spotName;
 
     /**
+     * 景区等级，如：5A、4A、国家级等
+     */
+    private String level;
+
+    /**
+     * 景区所属省份（如：浙江省、北京市）
+     */
+    private String province;
+
+    /**
      * 详情介绍
      */
     private String description;
@@ -51,6 +61,7 @@ public class ScenicSpot implements Serializable {
     /**
      * 图片地址JSON数组
      */
+    @TableField("image_urls")
     private String imageUrls;
 
     /**

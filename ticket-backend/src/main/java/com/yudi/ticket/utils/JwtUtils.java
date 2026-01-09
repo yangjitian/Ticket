@@ -2,9 +2,11 @@ package com.yudi.ticket.utils;
 
 import cn.hutool.core.date.DateTime;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.jwt.JWT;
 import cn.hutool.jwt.JWTUtil;
 import jakarta.annotation.PostConstruct;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -141,5 +143,77 @@ public class JwtUtils {
     public static Integer getUserRole(String token) {
         JWT jwt = parseToken(token);
         return jwt == null ? null : Integer.parseInt(jwt.getPayload("role").toString());
+    }
+
+    /**
+     * 获取token的过期时间戳（秒级）
+     *
+     * @param token JWT token
+     * @return 过期时间戳，失败返回0
+     */
+    public static long getExpirationTime(String token) {
+        try {
+            JWT jwt = parseToken(token);
+            if (jwt == null) {
+                return 0;
+            }
+            Object exp = jwt.getPayload("exp");
+            if (exp instanceof Number) {
+                return ((Number) exp).longValue();
+            }
+            return 0;
+        } catch (Exception e) {
+            log.warn("解析token过期时间失败: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 从HttpServletRequest中获取用户ID
+     *
+     * @param request HTTP请求
+     * @return 用户ID，失败返回null
+     */
+    public static Long getUserIdFromToken(HttpServletRequest request) {
+        try {
+            String token = getTokenFromRequest(request);
+            return getUserId(token);
+        } catch (Exception e) {
+            log.warn("从请求中获取用户ID失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从HttpServletRequest中获取用户角色
+     *
+     * @param request HTTP请求
+     * @return 用户角色，失败返回null
+     */
+    public static Integer getUserRoleFromToken(HttpServletRequest request) {
+        try {
+            String token = getTokenFromRequest(request);
+            return getUserRole(token);
+        } catch (Exception e) {
+            log.warn("从请求中获取用户角色失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从HttpServletRequest中获取token
+     *
+     * @param request HTTP请求
+     * @return token字符串
+     */
+    private static String getTokenFromRequest(HttpServletRequest request) {
+        String token = request.getHeader("Authorization");
+        if (StrUtil.isBlank(token)) {
+            throw new RuntimeException("Authorization header is missing");
+        }
+        if (token.startsWith("Bearer ")) {
+            token = token.substring(7);
+        }
+        return token;
     }
 }

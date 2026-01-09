@@ -16,7 +16,7 @@
             v-model="searchForm.spotName"
             placeholder="请输入景区名称"
             clearable
-            style="width: 200px"
+            style="width: 150px"
             @keyup.enter="handleSearch"
           />
         </el-form-item>
@@ -25,9 +25,45 @@
             v-model="searchForm.address"
             placeholder="请输入地址"
             clearable
-            style="width: 200px"
+            style="width: 150px"
             @keyup.enter="handleSearch"
           />
+        </el-form-item>
+        <el-form-item label="省份">
+          <el-select
+            v-model="searchForm.province"
+            placeholder="请选择省份"
+            clearable
+            style="width: 150px"
+          >
+            <el-option label="北京市" value="北京市" />
+            <el-option label="上海市" value="上海市" />
+            <el-option label="广东省" value="广东省" />
+            <el-option label="江苏省" value="江苏省" />
+            <el-option label="浙江省" value="浙江省" />
+            <el-option label="山东省" value="山东省" />
+            <el-option label="河南省" value="河南省" />
+            <el-option label="湖北省" value="湖北省" />
+            <el-option label="湖南省" value="湖南省" />
+            <el-option label="安徽省" value="安徽省" />
+            <el-option label="福建省" value="福建省" />
+            <el-option label="江西省" value="江西省" />
+            <el-option label="广西壮族自治区" value="广西壮族自治区" />
+            <el-option label="海南省" value="海南省" />
+            <el-option label="重庆市" value="重庆市" />
+            <el-option label="四川省" value="四川省" />
+            <el-option label="贵州省" value="贵州省" />
+            <el-option label="云南省" value="云南省" />
+            <el-option label="西藏自治区" value="西藏自治区" />
+            <el-option label="陕西省" value="陕西省" />
+            <el-option label="甘肃省" value="甘肃省" />
+            <el-option label="青海省" value="青海省" />
+            <el-option label="宁夏回族自治区" value="宁夏回族自治区" />
+            <el-option label="新疆维吾尔自治区" value="新疆维吾尔自治区" />
+            <el-option label="台湾省" value="台湾省" />
+            <el-option label="香港特别行政区" value="香港特别行政区" />
+            <el-option label="澳门特别行政区" value="澳门特别行政区" />
+          </el-select>
         </el-form-item>
         <el-form-item label="状态">
           <el-select
@@ -62,6 +98,8 @@
     >
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="spotName" label="景区名称" width="140" />
+      <el-table-column prop="level" label="等级" width="80" />
+      <el-table-column prop="province" label="省份" width="100" />
       <el-table-column prop="address" label="地址" min-width="160" />
       <el-table-column prop="contactNum" label="联系电话" width="120" />
       <el-table-column label="图片" width="120">
@@ -145,6 +183,19 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
+            <el-form-item label="景区等级">
+              <el-input v-model="scenicForm.level" placeholder="请输入景区等级（如：5A、4A）" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="所属省份">
+              <el-input v-model="scenicForm.province" placeholder="请输入所属省份（如：浙江省）" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="联系电话" prop="contactNum">
               <el-input v-model="scenicForm.contactNum" placeholder="请输入联系电话" />
             </el-form-item>
@@ -208,10 +259,14 @@
             :before-upload="beforeUpload"
             :http-request="handleUpload"
             :limit="10"
+            drag
             list-type="picture-card"
             accept="image/*"
           >
-            <el-icon><Plus /></el-icon>
+            <el-icon class="el-icon--upload"><Plus /></el-icon>
+            <div class="el-upload__text">
+              将图片拖到此处，或 <em>点击上传</em>
+            </div>
             <template #tip>
               <div class="upload-tip">支持jpg、jpeg、png、gif、webp格式，文件大小不超过4MB</div>
             </template>
@@ -284,6 +339,7 @@ const pageSize = ref(10)
 const searchForm = reactive({
   spotName: '',
   address: '',
+  province: '',
   spotStatus: undefined as number | undefined
 })
 
@@ -291,6 +347,8 @@ const searchForm = reactive({
 const scenicForm = reactive({
   id: '',
   spotName: '',
+  level: '',
+  province: '',
   description: '',
   address: '',
   openTime: '', // 保持原有字段用于向后兼容
@@ -375,6 +433,7 @@ const handleReset = () => {
   Object.assign(searchForm, {
     spotName: '',
     address: '',
+    province: '',
     spotStatus: undefined
   })
   handleSearch()
@@ -400,6 +459,8 @@ const showEditDialog = (row: ScenicSpot) => {
   Object.assign(scenicForm, {
     id: row.id,
     spotName: row.spotName,
+    level: row.level || '',
+    province: row.province || '',
     description: row.description,
     address: row.address,
     openTime: description, // 其他说明文字
@@ -470,6 +531,8 @@ const resetForm = () => {
   Object.assign(scenicForm, {
     id: '',
     spotName: '',
+    level: '',
+    province: '',
     description: '',
     address: '',
     openTime: '',
@@ -791,5 +854,13 @@ onMounted(() => {
 .description-cell {
   line-height: 1.4;
   color: #666;
+}
+
+.upload-disabled {
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  background-color: #fafafa;
 }
 </style>

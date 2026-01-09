@@ -85,10 +85,10 @@ const handleLogin = async () => {
     if (response.data.code === 200) {
       const userLoginVO = response.data.data
 
-      // 保存token和用户信息到localStorage
-      localStorage.setItem('token', userLoginVO.token)
-      localStorage.setItem('userRole', userLoginVO.role.toString())
-      localStorage.setItem('user', JSON.stringify(userLoginVO))
+      // 保存管理员登录信息到localStorage (使用admin_前缀)
+      localStorage.setItem('admin_token', userLoginVO.token)
+      localStorage.setItem('admin_userRole', userLoginVO.role.toString())
+      localStorage.setItem('admin_user', JSON.stringify(userLoginVO))
 
       ElMessage.success('登录成功')
 

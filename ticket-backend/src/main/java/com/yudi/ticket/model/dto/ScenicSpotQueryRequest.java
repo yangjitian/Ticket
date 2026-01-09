@@ -35,6 +35,16 @@ public class ScenicSpotQueryRequest implements Serializable {
     private String spotName;
 
     /**
+     * 景区等级（精确查询）
+     */
+    private String level;
+
+    /**
+     * 景区所属省份（精确查询）
+     */
+    private String province;
+
+    /**
      * 地址（模糊查询）
      */
     private String address;

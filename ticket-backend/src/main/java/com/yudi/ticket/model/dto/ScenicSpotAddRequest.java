@@ -21,6 +21,16 @@ public class ScenicSpotAddRequest implements Serializable {
     private String spotName;
 
     /**
+     * 景区等级，如：5A、4A、国家级等
+     */
+    private String level;
+
+    /**
+     * 景区所属省份（如：浙江省、北京市）
+     */
+    private String province;
+
+    /**
      * 详情介绍
      */
     private String description;

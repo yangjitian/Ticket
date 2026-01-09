@@ -15,6 +15,12 @@ public interface EmailService {
     void sendResetCode(String email);
 
     /**
+     * 发送邮箱换绑验证码
+     * @param email
+     */
+    void sendChangeCode(String email);
+
+    /**
      * 发送审核通过通知
      * @param email
      */

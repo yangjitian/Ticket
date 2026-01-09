@@ -59,7 +59,7 @@
 
             <div class="order-content">
               <div class="product-info">
-                <div class="product-name">{{ order.productName }}</div>
+                <div class="product-name">{{ order.spotName }} - {{ order.ticketTypeName }}</div>
                 <div class="product-details">
                   <span>游玩日期：{{ formatDate(order.visitDate) }}</span>
                   <span>数量：{{ order.buyNum }}张</span>
@@ -69,7 +69,7 @@
 
               <div class="order-amount">
                 <div class="amount">￥{{ order.payAmount }}</div>
-                <div class="settlement">结算价：￥{{ order.settlementUnitPrice }}</div>
+                <div class="settlement">票种：{{ order.ticketTypeName }}</div>
               </div>
             </div>
 
@@ -78,6 +78,8 @@
                 v-if="order.orderStatus === 0"
                 type="primary"
                 size="small"
+                :loading="payLoading[order.id]"
+                :disabled="payLoading[order.id]"
                 @click="payOrder(order)"
               >
                 立即支付
@@ -105,9 +107,22 @@
                 v-if="order.orderStatus === 0"
                 type="danger"
                 size="small"
+                :loading="cancelLoading[order.id]"
+                :disabled="cancelLoading[order.id]"
                 @click="cancelOrder(order)"
               >
                 取消订单
+              </el-button>
+
+              <el-button
+                v-if="order.orderStatus > 0"
+                type="danger"
+                size="small"
+                :loading="deleteLoading[order.id]"
+                :disabled="deleteLoading[order.id]"
+                @click="deleteOrder(order)"
+              >
+                删除订单
               </el-button>
             </div>
           </div>
@@ -146,13 +161,20 @@
     >
       <div class="verification-content">
         <div class="qr-code">
-          <div class="qr-placeholder">
+          <div v-if="qrCodeDataUrl" class="qr-code-image">
+            <img :src="qrCodeDataUrl" alt="核销码二维码" />
+          </div>
+          <div v-else class="qr-placeholder">
             <el-icon size="60"><Ticket /></el-icon>
             <p>{{ currentOrder?.verificationCode }}</p>
           </div>
         </div>
+        <div class="verification-code-text">
+          <p class="code-label">核销码：</p>
+          <p class="code-value">{{ currentOrder?.verificationCode }}</p>
+        </div>
         <div class="verification-tip">
-          <p>请向景区工作人员出示此核销码</p>
+          <p>请向景区工作人员出示二维码或核销码</p>
           <p>每个核销码只能使用一次</p>
         </div>
       </div>
@@ -162,10 +184,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Ticket } from '@element-plus/icons-vue'
-import { getUserOrders } from '@/user/api'
+import { getUserOrderVOs, payOrder, cancelOrder as cancelOrderApi, deleteOrder as deleteOrderApi } from '@/user/api'
 import type { OrderInfo, OrderQueryRequest } from '@/types/user'
+
+const router = useRouter()
 
 // 订单列表
 const orders = ref<OrderInfo[]>([])
@@ -182,8 +207,32 @@ const searchQuery = ref('')
 const verificationDialog = ref(false)
 const currentOrder = ref<OrderInfo | null>(null)
 
+// 二维码
+const qrCodeDataUrl = ref('')
+
+// 支付、取消、删除loading状态
+const payLoading = ref<Record<string, boolean>>({})
+const cancelLoading = ref<Record<string, boolean>>({})
+const deleteLoading = ref<Record<string, boolean>>({})
+
 // 获取订单列表
+// 检查登录状态
+const checkLoginStatus = () => {
+  const token = localStorage.getItem('user_token')
+  if (!token) {
+    ElMessage.warning('请先登录')
+    router.push('/login')
+    return false
+  }
+  return true
+}
+
 const fetchOrders = async () => {
+  // 先检查登录状态
+  if (!checkLoginStatus()) {
+    return
+  }
+
   try {
     loading.value = true
 
@@ -196,57 +245,16 @@ const fetchOrders = async () => {
       params.orderStatus = Number(statusFilter.value)
     }
 
-    // TODO: 实现后端API
-    // const response = await getUserOrders(params)
+    // 调用真实的API
+    const response = await getUserOrderVOs(params)
 
-    // 暂时使用模拟数据
-    const mockOrders: OrderInfo[] = [
-      {
-        id: '1',
-        orderSn: 'ORDER20241227001',
-        buyerId: '1',
-        productId: '1',
-        visitDate: '2024-12-28',
-        buyNum: 2,
-        unitPrice: 80,
-        settlementUnitPrice: 70,
-        commissionAmount: 20,
-        payAmount: 160,
-        orderStatus: 1,
-        verificationCode: 'SCENIC001122334455',
-        createTime: '2024-12-27 10:30:00'
-      },
-      {
-        id: '2',
-        orderSn: 'ORDER20241227002',
-        buyerId: '1',
-        productId: '2',
-        visitDate: '2024-12-29',
-        buyNum: 1,
-        unitPrice: 40,
-        settlementUnitPrice: 35,
-        commissionAmount: 5,
-        payAmount: 40,
-        orderStatus: 2,
-        verificationCode: 'SCENIC001122334456',
-        verifyTime: '2024-12-29 14:20:00',
-        createTime: '2024-12-27 15:45:00'
-      }
-    ]
-
-    // 筛选模拟数据
-    let filteredOrders = mockOrders
-    if (statusFilter.value !== '') {
-      filteredOrders = mockOrders.filter(order =>
-        order.orderStatus === Number(statusFilter.value)
-      )
+    if (response.data.code === 200) {
+      const pageData = response.data.data
+      orders.value = pageData.records || []
+      total.value = pageData.total || 0
+    } else {
+      ElMessage.error(response.data.message || '获取订单列表失败')
     }
-
-    orders.value = filteredOrders.slice(
-      (currentPage.value - 1) * pageSize.value,
-      currentPage.value * pageSize.value
-    )
-    total.value = filteredOrders.length
 
   } catch (error) {
     console.error('获取订单列表失败:', error)
@@ -301,14 +309,53 @@ const getStatusText = (status: number) => {
 }
 
 // 支付订单
-const payOrder = (order: OrderInfo) => {
-  // 跳转到支付页面或显示支付对话框
-  ElMessage.info('跳转到支付页面')
+const payOrder = async (order: OrderInfo) => {
+  const orderId = order.id as string
+
+  // 设置loading状态
+  payLoading.value[orderId] = true
+
+  try {
+    // 调用支付API
+    const payData = {
+      orderId: order.id,
+      payType: 1 // 默认微信支付
+    }
+
+    const response = await payOrder(payData)
+
+    if (response.data.code === 200) {
+      ElMessage.success('支付成功')
+      // 刷新订单列表
+      fetchOrders()
+    } else {
+      ElMessage.error(response.data.message || '支付失败')
+    }
+  } catch (error) {
+    console.error('支付订单失败:', error)
+    ElMessage.error('支付失败，请重试')
+  } finally {
+    // 清除loading状态
+    payLoading.value[orderId] = false
+  }
 }
 
 // 查看核销码
-const showVerificationCode = (order: OrderInfo) => {
+const showVerificationCode = async (order: OrderInfo) => {
   currentOrder.value = order
+
+  // 生成二维码
+  if (order.verificationCode) {
+    try {
+      // 使用在线二维码API生成二维码
+      const qrData = encodeURIComponent(`VERIFICATION:${order.verificationCode}:ORDER:${order.id}`)
+      qrCodeDataUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}&format=png`
+    } catch (error) {
+      console.error('生成二维码失败:', error)
+      qrCodeDataUrl.value = ''
+    }
+  }
+
   verificationDialog.value = true
 }
 
@@ -319,6 +366,11 @@ const viewOrderDetail = (order: OrderInfo) => {
 
 // 取消订单
 const cancelOrder = async (order: OrderInfo) => {
+  const orderId = order.id as string
+
+  // 设置loading状态
+  cancelLoading.value[orderId] = true
+
   try {
     await ElMessageBox.confirm('确定要取消此订单吗？', '提示', {
       confirmButtonText: '确定',
@@ -326,11 +378,64 @@ const cancelOrder = async (order: OrderInfo) => {
       type: 'warning'
     })
 
-    // TODO: 调用取消订单API
-    ElMessage.success('订单已取消')
-    fetchOrders()
-  } catch {
-    // 用户取消操作
+    // 调用取消订单API
+    const response = await cancelOrderApi(order.id)
+
+    if (response.data.code === 200) {
+      ElMessage.success('订单已取消')
+      fetchOrders()
+    } else {
+      ElMessage.error(response.data.message || '取消订单失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('取消订单失败:', error)
+      ElMessage.error('取消订单失败，请重试')
+    }
+  } finally {
+    // 清除loading状态
+    cancelLoading.value[orderId] = false
+  }
+}
+
+// 删除订单
+const deleteOrder = async (order: OrderInfo) => {
+  const orderId = order.id as string
+
+  // 设置loading状态
+  deleteLoading.value[orderId] = true
+
+  try {
+    await ElMessageBox.confirm('确定要删除此订单吗？删除后不可恢复！', '警告', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
+
+    // 调用删除订单API
+    console.log('调用删除订单API - 订单ID:', order.id, '类型:', typeof order.id)
+    const orderIdNum = Number(order.id)
+    console.log('转换后的订单ID:', orderIdNum, '类型:', typeof orderIdNum)
+    const response = await deleteOrderApi(orderIdNum)
+    console.log('删除订单API响应:', response)
+
+    if (response.data.code === 200) {
+      ElMessage.success('订单已删除')
+      console.log('订单删除成功，准备刷新订单列表')
+      fetchOrders()
+    } else {
+      console.error('删除订单失败 - 响应码:', response.data.code, '消息:', response.data.message)
+      ElMessage.error(response.data.message || '删除订单失败')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除订单失败:', error)
+      ElMessage.error('删除订单失败，请重试')
+    }
+  } finally {
+    // 清除loading状态
+    deleteLoading.value[orderId] = false
   }
 }
 
@@ -519,7 +624,21 @@ onMounted(() => {
 }
 
 .qr-code {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
+
+.qr-code-image {
+  display: inline-block;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  border: 2px solid #e8e8e8;
+}
+
+.qr-code-image img {
+  width: 180px;
+  height: 180px;
+  border-radius: 4px;
 }
 
 .qr-placeholder {
@@ -540,6 +659,29 @@ onMounted(() => {
   margin: 0;
   font-family: monospace;
   letter-spacing: 2px;
+}
+
+.verification-code-text {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+}
+
+.code-label {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.code-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  font-family: monospace;
+  letter-spacing: 1px;
+  word-break: break-all;
 }
 
 .verification-tip {

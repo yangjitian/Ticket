@@ -28,7 +28,7 @@
         </el-menu-item>
         <el-menu-item index="ticket-inventory">
           <el-icon><Tickets /></el-icon>
-          <span>门票库存管理</span>
+          <span>门票价格及库存管理</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -77,7 +77,7 @@ import UserManagement from './UserManagement.vue'
 import ScenicManagement from './ScenicManagement.vue'
 import DistributorManagement from './DistributorManagement.vue'
 import TicketInventory from './TicketInventory.vue'
-import { logout } from '@/admin/api'
+import { logout, getCurrentAdmin } from '@/admin/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -106,9 +106,33 @@ const setCurrentView = (path: string) => {
   }
 }
 
+// 验证管理员token并初始化
+const validateAdminToken = async () => {
+  const token = localStorage.getItem('admin_token')
+
+  if (token) {
+    try {
+      // 验证token有效性
+      await getCurrentAdmin()
+      // token有效，继续正常流程
+      setCurrentView(route.path)
+    } catch (error) {
+      // token无效，跳转到登录页
+      console.warn('管理员token无效:', error)
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_userRole')
+      localStorage.removeItem('admin_user')
+      router.push('/admin/login')
+    }
+  } else {
+    // 没有token，跳转到登录页
+    router.push('/admin/login')
+  }
+}
+
 // 监听路由变化更新菜单激活状态
-onMounted(() => {
-  setCurrentView(route.path)
+onMounted(async () => {
+  await validateAdminToken()
 })
 
 // 菜单选择处理
@@ -144,12 +168,18 @@ const handleLogout = async () => {
       type: 'warning'
     })
 
-    await logout()
+    // 先清除管理员本地存储，防止其他API请求携带失效token
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_userRole')
+    localStorage.removeItem('admin_user')
 
-    // 清除本地存储
-    localStorage.removeItem('token')
-    localStorage.removeItem('userRole')
-    localStorage.removeItem('user')
+    // 再调用登出API
+    try {
+      await logout()
+    } catch (error) {
+      // 登出API失败不影响本地清理，静默处理
+      console.warn('登出API调用失败:', error)
+    }
 
     ElMessage.success('退出登录成功')
 
@@ -160,9 +190,9 @@ const handleLogout = async () => {
     if (error !== 'cancel') {
       console.error('退出登录失败:', error)
       // 即使API调用失败，也清除本地存储并跳转
-      localStorage.removeItem('token')
-      localStorage.removeItem('userRole')
-      localStorage.removeItem('user')
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin_userRole')
+      localStorage.removeItem('admin_user')
       router.push('/admin/login')
     }
   }

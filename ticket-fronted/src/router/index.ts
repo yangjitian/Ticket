@@ -15,22 +15,10 @@ const router = createRouter({
           meta: { requiresAuth: false }
         },
         {
-          path: 'spots',
-          name: 'SpotList',
-          component: () => import('@/views/user/SpotList.vue'),
-          meta: { requiresAuth: false }
-        },
-        {
           path: 'spot/:id',
           name: 'SpotDetail',
           component: () => import('@/views/user/SpotDetail.vue'),
           meta: { requiresAuth: false }
-        },
-        {
-          path: 'checkout',
-          name: 'Checkout',
-          component: () => import('@/views/user/Checkout.vue'),
-          meta: { requiresAuth: true }
         },
         {
           path: 'orders',
@@ -43,6 +31,36 @@ const router = createRouter({
           name: 'UserProfile',
           component: () => import('@/views/user/UserProfile.vue'),
           meta: { requiresAuth: true }
+        },
+        {
+          path: 'distributor',
+          name: 'DistributorManagement',
+          component: () => import('@/views/user/DistributorManagement.vue'),
+          meta: { requiresAuth: true, requiresDistributor: true }
+        },
+        {
+          path: 'passenger-selection',
+          name: 'PassengerSelection',
+          component: () => import('@/views/user/PassengerSelection.vue'),
+          meta: { requiresAuth: true }
+        },
+        {
+          path: 'order-confirmation',
+          name: 'OrderConfirmation',
+          component: () => import('@/views/user/OrderConfirmation.vue'),
+          meta: { requiresAuth: true }
+        },
+        {
+          path: 'payment',
+          name: 'Payment',
+          component: () => import('@/views/user/Payment.vue'),
+          meta: { requiresAuth: true }
+        },
+        {
+          path: 'e-ticket',
+          name: 'ETicket',
+          component: () => import('@/views/user/ETicket.vue'),
+          meta: { requiresAuth: true }
         }
       ]
     },
@@ -51,6 +69,13 @@ const router = createRouter({
       path: '/login',
       name: 'UserLogin',
       component: () => import('@/views/user/Login.vue'),
+      meta: { requiresAuth: false }
+    },
+    // 用户注册页
+    {
+      path: '/register',
+      name: 'UserRegister',
+      component: () => import('@/views/user/Register.vue'),
       meta: { requiresAuth: false }
     },
     // 管理员端路由
@@ -84,7 +109,7 @@ const router = createRouter({
     },
     {
       path: '/admin/distributor-management',
-      name: 'DistributorManagement',
+      name: 'AdminDistributorManagement',
       component: () => import('@/views/admin/DashboardLayout.vue'),
       meta: { requiresAuth: true, role: 'admin' }
     },
@@ -99,14 +124,27 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  const userRole = localStorage.getItem('userRole')
+  // 判断是管理员路由还是用户路由
+  const isAdminRoute = to.path.startsWith('/admin')
+
+  let token, userRole, userAuditStatus
+
+  if (isAdminRoute) {
+    // 管理员路由：使用admin_前缀的localStorage键
+    token = localStorage.getItem('admin_token')
+    userRole = localStorage.getItem('admin_userRole')
+  } else {
+    // 用户路由：使用user_前缀的localStorage键
+    token = localStorage.getItem('user_token')
+    userRole = localStorage.getItem('user_userRole')
+    userAuditStatus = localStorage.getItem('user_userAuditStatus')
+  }
 
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
     if (!token) {
       // 如果是管理员路由，重定向到管理员登录页
-      if (to.path.startsWith('/admin')) {
+      if (isAdminRoute) {
         next('/admin/login')
       } else {
         // 用户端路由重定向到用户登录页
@@ -119,6 +157,22 @@ router.beforeEach((to, from, next) => {
     if (to.meta.role === 'admin' && userRole !== '0') {
       next('/admin/login')
       return
+    }
+
+    // 检查经销商权限
+    if (to.meta.requiresDistributor) {
+      console.log('检查经销商权限:', { userRole, userRoleType: typeof userRole, userAuditStatus, userAuditStatusType: typeof userAuditStatus, token, to: to.path })
+      if (userRole !== '2') {
+        console.log('用户不是经销商，重定向到首页')
+        next('/')
+        return
+      }
+      if (userAuditStatus !== '1') {
+        console.log('经销商未审核通过，重定向到首页')
+        next('/')
+        return
+      }
+      console.log('用户是已审核的经销商，允许访问')
     }
   }
 

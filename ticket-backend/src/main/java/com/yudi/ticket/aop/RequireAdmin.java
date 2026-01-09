@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 /**
  * 管理员权限注解
  * 标注此注解的方法需要管理员权限才能访问
+ * 注意：此注解会自动包含登录状态校验
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
