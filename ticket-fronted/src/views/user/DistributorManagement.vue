@@ -87,28 +87,11 @@
 
           <!-- 趋势分析区 -->
           <div class="analysis-section">
-            <div class="chart-area">
+            <div class="chart-area" style="width: 100%">
               <div class="chart-header">
                 <h3>近15天佣金收益趋势</h3>
               </div>
               <div ref="commissionChartRef" class="commission-chart"></div>
-            </div>
-            <div class="top-spots">
-              <h3>热销景区TOP 3</h3>
-              <div class="spots-list">
-                <div
-                  v-for="(spot, index) in topSpots"
-                  :key="spot.id"
-                  class="spot-item"
-                >
-                  <div class="spot-rank">{{ index + 1 }}</div>
-                  <el-avatar :src="spot.image" size="60" shape="square" class="spot-image" />
-                  <div class="spot-info">
-                    <div class="spot-name">{{ spot.name }}</div>
-                    <div class="spot-sales">{{ spot.salesCount }}单</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -146,11 +129,10 @@
 
           <!-- 门票定价表格 -->
           <div class="pricing-table">
-            <el-table :data="filteredTickets" stripe style="width: 100%">
+            <el-table :data="filteredTickets" stripe style="width: 100%" v-loading="loading">
               <el-table-column label="景区信息" min-width="180">
                 <template #default="scope">
                   <div class="spot-info-cell">
-                    <el-avatar :src="scope.row.spotImage" size="50" shape="square" />
                     <div class="spot-details">
                       <div class="spot-name">{{ scope.row.spotName }}</div>
                       <div class="spot-level">{{ scope.row.spotLevel }}</div>
@@ -173,23 +155,11 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="我的售价" width="160" align="center">
+              <el-table-column label="分销售价" width="160" align="center">
                 <template #default="scope">
-                  <div class="price-input-wrapper">
-                    <el-input-number
-                      v-model="scope.row.myPrice"
-                      :min="scope.row.settlementPrice"
-                      :precision="2"
-                      controls-position="right"
-                      size="small"
-                      :class="{ 'price-error': scope.row.myPrice < scope.row.settlementPrice }"
-                      @change="calculateProfit(scope.row)"
-                    >
-                      <template #prefix>¥</template>
-                    </el-input-number>
-                    <div v-if="scope.row.myPrice < scope.row.settlementPrice" class="price-error-text">
-                      售价不得低于结算价
-                    </div>
+                  <div class="price-display">
+                    <span class="fixed-price">¥{{ scope.row.myPrice }}</span>
+                    <span class="price-note">(同零售价)</span>
                   </div>
                 </template>
               </el-table-column>
@@ -200,15 +170,15 @@
                   </span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="120" align="center">
+              <el-table-column label="操作" width="140" align="center">
                 <template #default="scope">
                   <el-button
                     type="primary"
                     size="small"
-                    :disabled="scope.row.myPrice < scope.row.settlementPrice"
-                    @click="savePricing(scope.row)"
+                    @click="copyLink(scope.row)"
                   >
-                    保存定价
+                   <el-icon style="margin-right: 4px"><CopyDocument /></el-icon>
+                    推广链接
                   </el-button>
                 </template>
               </el-table-column>
@@ -236,7 +206,7 @@
                 <div class="order-amount">¥{{ order.totalAmount }}</div>
                 <div class="commission-amount">预计分成：¥{{ order.commission }}</div>
                 <el-tag
-                  :type="order.status === '已完成' ? 'success' :
+                  :type="(order.status === '已完成' || order.status === '待核销') ? 'success' :
                         order.status === '待支付' ? 'warning' :
                         order.status === '已退款' ? 'danger' : 'info'"
                   size="small"
@@ -346,9 +316,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   HomeFilled, PriceTag, List, Wallet,
   Search, Money, Tickets, TrendCharts,
-  SwitchButton
+  SwitchButton, CopyDocument
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
+import { 
+  getDistributorProducts, 
+  getDistributorOrders, 
+  getDistributorOverview, 
+  getDistributorWallet, 
+  withdrawBalance,
+  getCurrentUser
+} from '@/user/api'
 
 // Router
 const router = useRouter()
@@ -362,6 +340,7 @@ interface MenuItem {
 
 interface Ticket {
   id: string
+  spotId: string
   spotName: string
   spotImage: string
   spotLevel: string
@@ -395,11 +374,14 @@ interface Bill {
 // Reactive data
 const activePage = ref('dashboard')
 const commissionChartRef = ref<HTMLElement>()
+const trendData = ref<any[]>([]) // Add trendData ref
 
-// User info (mock data - should come from login state)
+// User info
 const userInfo = reactive({
-  nickname: '张三经销商',
-  auditStatus: '1' // 1: 已认证, 0: 审核中, 2: 审核失败
+  id: '',
+  nickname: '',
+  auditStatus: '1', 
+  avatar: ''
 })
 
 // Menu items
@@ -412,128 +394,25 @@ const menuItems: MenuItem[] = [
 
 // Statistics data
 const statsData = reactive({
-  totalSales: 187500,
-  totalOrders: 1250,
-  totalProfit: 37500,
-  availableBalance: 31250
+  totalSales: 0,
+  totalOrders: 0,
+  totalProfit: 0,
+  availableBalance: 0
 })
 
 // Tickets data
-const tickets = ref<Ticket[]>([
-  {
-    id: '1',
-    spotName: '西湖景区',
-    spotImage: '',
-    spotLevel: '5A',
-    ticketType: '成人票',
-    retailPrice: 120,
-    settlementPrice: 80,
-    myPrice: 100,
-    profit: 20
-  },
-  {
-    id: '2',
-    spotName: '西湖景区',
-    spotImage: '',
-    spotLevel: '5A',
-    ticketType: '儿童票',
-    retailPrice: 60,
-    settlementPrice: 40,
-    myPrice: 50,
-    profit: 10
-  },
-  {
-    id: '3',
-    spotName: '灵隐寺',
-    spotImage: '',
-    spotLevel: '4A',
-    ticketType: '成人票',
-    retailPrice: 45,
-    settlementPrice: 30,
-    myPrice: 40,
-    profit: 10
-  },
-  {
-    id: '4',
-    spotName: '普陀山',
-    spotImage: '',
-    spotLevel: '5A',
-    ticketType: '成人票',
-    retailPrice: 150,
-    settlementPrice: 100,
-    myPrice: 130,
-    profit: 30
-  }
-])
+const tickets = ref<Ticket[]>([])
+const loading = ref(false)
 
 // Top spots data
-const topSpots = ref([
-  { id: '1', name: '西湖景区', image: '', salesCount: 456 },
-  { id: '2', name: '灵隐寺', image: '', salesCount: 234 },
-  { id: '3', name: '普陀山', image: '', salesCount: 189 }
-])
+const topSpots = ref<any[]>([])
 
 // Orders data
-const salesOrders = ref<Order[]>([
-  {
-    id: '1',
-    orderNumber: 'ORD20241201001',
-    spotName: '西湖景区',
-    playDate: '2024-12-15',
-    totalAmount: 200,
-    commission: 40,
-    createTime: '2024-12-01 10:30:00',
-    status: '已完成'
-  },
-  {
-    id: '2',
-    orderNumber: 'ORD20241201002',
-    spotName: '灵隐寺',
-    playDate: '2024-12-16',
-    totalAmount: 40,
-    commission: 10,
-    createTime: '2024-12-01 14:20:00',
-    status: '已完成'
-  },
-  {
-    id: '3',
-    orderNumber: 'ORD20241201003',
-    spotName: '普陀山',
-    playDate: '2024-12-18',
-    totalAmount: 130,
-    commission: 30,
-    createTime: '2024-12-02 09:15:00',
-    status: '待支付'
-  }
-])
+const salesOrders = ref<Order[]>([])
+const ordersTotal = ref(0)
 
 // Bills data
-const bills = ref<Bill[]>([
-  {
-    id: '1',
-    time: '2024-12-01 10:30:00',
-    type: '订单分佣',
-    description: '西湖景区成人票销售',
-    amount: 40,
-    balance: 31250
-  },
-  {
-    id: '2',
-    time: '2024-11-28 15:00:00',
-    type: '余额提现',
-    description: '提现到银行卡',
-    amount: -5000,
-    balance: 31050
-  },
-  {
-    id: '3',
-    time: '2024-11-25 09:30:00',
-    type: '平台费用',
-    description: '平台服务费',
-    amount: -50,
-    balance: 31000
-  }
-])
+const bills = ref<Bill[]>([])
 
 // Search and filter
 const ticketSearch = ref('')
@@ -543,166 +422,255 @@ const billMonth = ref('')
 // Withdraw dialog
 const withdrawDialogVisible = ref(false)
 const withdrawForm = reactive({
-  amount: 1000,
-  actualAmount: 1000
+  amount: 0,
+  actualAmount: 0 // For display only, same as amount
 })
 
 // Computed
 const filteredTickets = computed(() => {
   return tickets.value.filter(ticket => {
-    const nameMatch = ticket.spotName.includes(ticketSearch.value)
+    const nameMatch = !ticketSearch.value || ticket.spotName.includes(ticketSearch.value)
     const typeMatch = !ticketTypeFilter.value || ticket.ticketType === ticketTypeFilter.value
     return nameMatch && typeMatch
   })
 })
 
 const filteredBills = computed(() => {
-  if (!billMonth.value) return bills.value
-  return bills.value.filter(bill => bill.time.startsWith(billMonth.value))
+  // Backend filtering usually, but here we do simple client or assume backend does it
+  return bills.value
 })
 
 // Methods
+const fetchUserInfo = async () => {
+    try {
+        const res = await getCurrentUser()
+        if (res.data.code === 200) {
+            const u = res.data.data
+            userInfo.id = u.id
+            userInfo.nickname = u.nickname
+            userInfo.auditStatus = u.auditStatus ? String(u.auditStatus) : '0' // Assuming 1 is approved
+            // update stats if available in user object, but we have dedicated api
+        }
+    } catch(e) {
+        console.error(e)
+    }
+}
+
+const fetchOverview = async () => {
+    try {
+        const res = await getDistributorOverview()
+        if (res.data.code === 200) {
+            const data = res.data.data
+            statsData.totalSales = data.totalSales || 0
+            statsData.totalOrders = data.totalOrders || 0
+            statsData.totalProfit = data.totalProfit || 0
+            statsData.availableBalance = data.availableBalance || 0
+            
+            // Map trend data
+            trendData.value = data.trend || []
+
+            // Re-render chart if active
+            if (activePage.value === 'dashboard') {
+                nextTick(() => {
+                    renderCommissionChart()
+                })
+            }
+        }
+    } catch (e) { console.error(e) }
+}
+
+const fetchProducts = async () => {
+    loading.value = true
+    try {
+        const res = await getDistributorProducts({ current: 1, pageSize: 100 }) // fetch all for now
+        if (res.data.code === 200) {
+            tickets.value = res.data.data.records.map((item: any) => ({
+                id: String(item.id),
+                spotId: String(item.spotId),
+                spotName: item.spotName,
+                spotImage: '', 
+                spotLevel: item.spotLevel,
+                ticketType: item.ticketType,
+                retailPrice: item.retailPrice,
+                settlementPrice: item.settlementPrice,
+                myPrice: item.myPrice, // This is fixed to retailPrice in backend now
+                profit: item.profit
+            }))
+        }
+    } catch (e) { console.error(e) }
+    finally { loading.value = false }
+}
+
+const fetchOrders = async () => {
+    try {
+        const res = await getDistributorOrders({ current: 1, pageSize: 50 })
+        if (res.data.code === 200) {
+            salesOrders.value = res.data.data.records.map((order: any) => ({
+                id: order.id,
+                orderNumber: order.orderSn,
+                spotName: order.spotName,
+                playDate: order.playDate,
+                totalAmount: order.totalAmount,
+                commission: order.commission,
+                createTime: order.createTime.replace('T', ' '),
+                status: order.orderStatus
+            }))
+            ordersTotal.value = res.data.data.total
+        }
+    } catch (e) { console.error(e) }
+}
+
+const fetchWallet = async () => {
+    try {
+        const res = await getDistributorWallet(billMonth.value)
+        if (res.data.code === 200) {
+            statsData.availableBalance = res.data.data.availableBalance
+            bills.value = res.data.data.bills
+        }
+    } catch (e) { console.error(e) }
+}
+
 const switchPage = (pageKey: string) => {
   activePage.value = pageKey
   if (pageKey === 'dashboard') {
+    fetchOverview()
     nextTick(() => {
       renderCommissionChart()
     })
+  } else if (pageKey === 'pricing') {
+      fetchProducts()
+  } else if (pageKey === 'orders') {
+      fetchOrders()
+  } else if (pageKey === 'finance') {
+      fetchWallet()
   }
 }
 
 const formatCurrency = (amount: number) => {
-  return `¥${amount.toLocaleString()}`
+  return `¥${(amount || 0).toLocaleString()}`
 }
 
 const renderCommissionChart = () => {
   if (!commissionChartRef.value) return
-
-  // 销毁之前的图表实例
   echarts.dispose(commissionChartRef.value)
-
   const chart = echarts.init(commissionChartRef.value)
-
-  // 生成近15天的数据
+  
   const dates = []
   const commissions = []
-
-  for (let i = 14; i >= 0; i--) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    dates.push(date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }))
-    commissions.push(Math.floor(Math.random() * 2000) + 500)
+  
+  // Use real trend data
+  if (trendData.value && trendData.value.length > 0) {
+      // Data is ordered from -14 days to today
+      trendData.value.forEach((item: any) => {
+          // Format date: 2024-01-01 -> 01-01
+          const dateStr = item.date ? item.date.substring(5) : ''
+          dates.push(dateStr)
+          commissions.push(item.profit || 0)
+      })
+  } else {
+      // Fallback empty chart if no data
+      for (let i = 14; i >= 0; i--) {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        dates.push(date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }))
+        commissions.push(0)
+      }
   }
 
   const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: (params: any) => {
-        const param = params[0]
-        return `${param.name}<br/>佣金: ${formatCurrency(param.value)}`
-      }
-    },
-    grid: {
-      left: '3%',
-      right: '4%',
-      bottom: '3%',
-      containLabel: true
-    },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      axisLabel: {
-        rotate: 45
-      }
-    },
-    yAxis: {
-      type: 'value',
-      name: '佣金(元)',
-      axisLabel: {
-        formatter: '{value}元'
-      }
-    },
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: dates },
+    yAxis: { type: 'value', name: '佣金(元)' },
     series: [{
       name: '佣金收益',
       type: 'line',
       data: commissions,
       smooth: true,
-      itemStyle: {
-        color: '#1890ff'
-      },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [{
-            offset: 0, color: 'rgba(24, 144, 255, 0.3)'
-          }, {
-            offset: 1, color: 'rgba(24, 144, 255, 0.1)'
-          }]
-        }
-      }
+      itemStyle: { color: '#1890ff' },
+      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(24, 144, 255, 0.3)' }, { offset: 1, color: 'rgba(24, 144, 255, 0.1)' }] } }
     }]
   }
-
   chart.setOption(option)
-
-  // 响应式调整
-  const resizeObserver = new ResizeObserver(() => {
-    chart.resize()
-  })
+  const resizeObserver = new ResizeObserver(() => chart.resize())
   resizeObserver.observe(commissionChartRef.value)
-
-  return () => {
-    resizeObserver.disconnect()
-    chart.dispose()
-  }
+  return () => { resizeObserver.disconnect(); chart.dispose() }
 }
 
-const filterTickets = () => {
-  // 筛选逻辑已在computed中实现
-}
-
-const resetFilters = () => {
-  ticketSearch.value = ''
-  ticketTypeFilter.value = ''
-}
+const filterTickets = () => {}
+const resetFilters = () => { ticketSearch.value = ''; ticketTypeFilter.value = '' }
 
 const calculateProfit = (ticket: Ticket) => {
-  ticket.profit = ticket.myPrice - ticket.settlementPrice
+    // Read only now
 }
 
-const savePricing = (ticket: Ticket) => {
-  if (ticket.myPrice < ticket.settlementPrice) {
-    ElMessage.error('售价不得低于结算价')
-    return
-  }
-
-  ElMessage.success(`"${ticket.spotName}-${ticket.ticketType}"定价已保存`)
+const copyLink = (ticket: Ticket) => {
+    if (!userInfo.id) {
+        ElMessage.warning('用户信息未加载，无法生成对应的推广链接')
+        return
+    }
+    if (!ticket.spotId) {
+        console.error('Ticket missing spotId:', ticket)
+        ElMessage.error('无法获取景区ID，请刷新重试')
+        return
+    }
+    console.log('Generating link for ticket:', ticket)
+    const origin = window.location.origin
+    const url = `${origin}/spot/${ticket.spotId}?ref=${userInfo.id}`
+    console.log('Generated URL:', url)
+    navigator.clipboard.writeText(url).then(() => {
+        ElMessage.success('推广链接已复制')
+    }).catch(() => {
+        // Fallback for some browsers
+        const input = document.createElement('input')
+        input.value = url
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand('copy')
+        document.body.removeChild(input)
+        ElMessage.success('推广链接已复制')
+    })
 }
 
 const showWithdrawDialog = () => {
-  withdrawForm.amount = Math.min(1000, statsData.availableBalance)
-  withdrawForm.actualAmount = withdrawForm.amount
+  withdrawForm.amount = 0
+  withdrawForm.actualAmount = 0
   withdrawDialogVisible.value = true
 }
 
 const submitWithdrawForm = async () => {
-  ElMessage.success('提现申请已提交，预计1个工作日到账')
-  withdrawDialogVisible.value = false
+  if (withdrawForm.amount < 100) {
+      ElMessage.warning('最低提现金额100元')
+      return
+  }
+  if (withdrawForm.amount > statsData.availableBalance) {
+      ElMessage.warning('余额不足')
+      return
+  }
+  try {
+      const res = await withdrawBalance(withdrawForm.amount)
+      if (res.data.code === 200) {
+          ElMessage.success('提现申请成功')
+          withdrawDialogVisible.value = false
+          fetchWallet() // refresh
+      } else {
+          ElMessage.error(res.data.message || '提现失败')
+      }
+  } catch (e) {
+      console.error(e)
+      ElMessage.error('提现失败')
+  }
 }
 
 const filterBillsByMonth = () => {
-  // 筛选逻辑已在computed中实现
+    fetchWallet()
 }
 
 const handleLogout = () => {
+  localStorage.removeItem('user_token')
   router.push('/login')
 }
 
-// Form validation rules
 const withdrawRules = {
   amount: [
     { required: true, message: '请输入提现金额', trigger: 'blur' },
@@ -710,13 +678,12 @@ const withdrawRules = {
   ]
 }
 
-// Lifecycle
-onMounted(() => {
-  if (activePage.value === 'dashboard') {
-    nextTick(() => {
-      renderCommissionChart()
-    })
-  }
+onMounted(async () => {
+    await fetchUserInfo()
+    if (activePage.value === 'dashboard') {
+        fetchOverview()
+        nextTick(() => renderCommissionChart())
+    }
 })
 </script>
 

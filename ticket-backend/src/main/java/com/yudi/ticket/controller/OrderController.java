@@ -37,6 +37,7 @@ public class OrderController {
      */
     @PostMapping("/book")
     public BaseResponse<OrderVO> bookTicket(@RequestBody BookTicketRequest request, HttpServletRequest httpRequest) {
+        log.info("Received booking request: spotId={}, distributorId={}", request.getSpotId(), request.getDistributorId());
         ThrowUtils.throwIf(request == null, ErrorCode.PARAM_ERROR);
         Long userId = JwtUtils.getUserIdFromToken(httpRequest);
         ThrowUtils.throwIf(userId == null, ErrorCode.UNAUTHORIZED);

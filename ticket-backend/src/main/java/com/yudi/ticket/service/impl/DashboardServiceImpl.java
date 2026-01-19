@@ -292,4 +292,18 @@ public class DashboardServiceImpl implements DashboardService {
 
         return stats;
     }
+
+    @Override
+    public void clearCache() {
+        // 清除控制台统计缓存
+        redisTemplate.delete(DASHBOARD_STATS_KEY);
+
+        // 清除收入统计缓存
+        Set<String> keys = redisTemplate.keys(REVENUE_STATS_KEY_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
+
+        log.info("清除控制台相关统计缓存");
+    }
 }

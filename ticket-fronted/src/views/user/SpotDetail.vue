@@ -804,6 +804,14 @@ const formatBusinessHours = (openTimeText: string) => {
   }
 
 onMounted(() => {
+  // Capture distributor referral ID if present
+  const refId = route.query.ref
+  if (refId) {
+    // sessionStorage is better for session-based attribution
+    sessionStorage.setItem('distributorId', String(refId))
+    console.log('Captured distributor ID:', refId)
+  }
+
   fetchSpotDetail()
 })
 </script>

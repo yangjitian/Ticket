@@ -7,8 +7,8 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8088/api
 const parseJsonSafely = (text: string) => {
   // 预处理JSON字符串，将大整数ID包装为字符串
   const processedText = text.replace(/("id"\s*:\s*)(-?\d{15,})/g, '$1"$2"')
-                              .replace(/("([a-zA-Z]+Id)"\s*:\s*)(-?\d{15,})/g, '$1"$2"')
-                              .replace(/("spotId"\s*:\s*)(-?\d{15,})/g, '$1"$2"')
+    .replace(/("([a-zA-Z]+Id)"\s*:\s*)(-?\d{15,})/g, '$1"$2"')
+    .replace(/("spotId"\s*:\s*)(-?\d{15,})/g, '$1"$2"')
 
   const parsed = JSON.parse(processedText)
 
@@ -21,7 +21,7 @@ const parseJsonSafely = (text: string) => {
         for (const key in obj) {
           // 处理所有以Id结尾的字段，以及id字段，强制转换为字符串确保精度
           if ((key === 'id' || key.endsWith('Id') || key.endsWith('ID') || key === 'spotId') &&
-              obj[key] != null) {
+            obj[key] != null) {
             // 无论当前是什么类型，都强制转换为字符串以确保精度
             obj[key] = String(obj[key])
           } else if (typeof obj[key] === 'object') {
@@ -160,11 +160,15 @@ export const getTicketStock = (productId: string, date: string) => {
 // 购票相关API
 export const bookTicket = (bookData: any) => {
   // 使用BigInt处理大整数，然后转换为字符串发送
-  const requestData = {
+  const requestData: any = {
     spotId: BigInt(bookData.spotId).toString(), // 使用BigInt确保精度
     ticketType: Number(bookData.ticketType),
     visitDate: String(bookData.visitDate),
     visitorIds: bookData.visitorIds.map((id: any) => BigInt(id).toString()) // 游客ID也使用BigInt
+  }
+
+  if (bookData.distributorId) {
+    requestData.distributorId = String(bookData.distributorId)
   }
 
   console.log('发送购票请求数据:', requestData)
@@ -243,4 +247,24 @@ export const setDefaultVisitor = (visitorId: string) => {
 
 export const getDefaultVisitor = () => {
   return instance.get('/user-visitor/default')
+}
+// 分销商相关API
+export const getDistributorProducts = (params: any) => {
+  return instance.get('/distributor/products', { params })
+}
+
+export const getDistributorOrders = (params: any) => {
+  return instance.get('/distributor/orders', { params })
+}
+
+export const getDistributorOverview = () => {
+  return instance.get('/distributor/overview')
+}
+
+export const getDistributorWallet = (month?: string) => {
+  return instance.get('/distributor/wallet', { params: { month } })
+}
+
+export const withdrawBalance = (amount: number) => {
+  return instance.post('/distributor/withdraw', { amount })
 }

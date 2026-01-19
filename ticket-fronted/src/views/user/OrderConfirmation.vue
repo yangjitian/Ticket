@@ -238,11 +238,21 @@ const createOrder = async () => {
     console.log('OrderConfirmation - 解码前spotId:', query.spotId)
     console.log('OrderConfirmation - 解码后spotId:', decodedSpotId)
 
-    const request = {
+    const request: any = {
       spotId: BigInt(decodedSpotId).toString(), // 使用BigInt确保大整数精度
       ticketType: Number(decodeURIComponent(query.ticketType as string)),
       visitDate: decodeURIComponent(query.visitDate as string),
       visitorIds: decodedVisitorIds.split(',').map(id => BigInt(id.trim()).toString()) // 游客ID也使用BigInt
+    }
+
+    // Check for distributor referral
+    const distributorId = sessionStorage.getItem('distributorId')
+    console.log('Session DistributorId:', distributorId)
+    if (distributorId && distributorId !== 'undefined' && distributorId !== 'null') {
+      request.distributorId = BigInt(distributorId).toString()
+      console.log('Sending distributorId in request:', request.distributorId)
+    } else {
+        console.warn('No valid distributorId found in session')
     }
 
     console.log('购票请求参数:', request)

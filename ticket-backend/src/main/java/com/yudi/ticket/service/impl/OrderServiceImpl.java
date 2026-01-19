@@ -21,7 +21,9 @@ import com.yudi.ticket.model.dto.CreateOrderRequest;
 import com.yudi.ticket.model.dto.OrderQueryRequest;
 import com.yudi.ticket.model.dto.PayOrderRequest;
 import com.yudi.ticket.model.dto.VerifyOrderRequest;
+import com.yudi.ticket.model.entity.CommissionLog;
 import com.yudi.ticket.model.entity.Order;
+import com.yudi.ticket.mapper.CommissionLogMapper;
 import com.yudi.ticket.model.entity.OrderVisitor;
 import com.yudi.ticket.model.entity.ScenicSpot;
 import com.yudi.ticket.model.entity.ScenicStock;
@@ -32,6 +34,7 @@ import com.yudi.ticket.model.vo.BookTicketVO;
 import com.yudi.ticket.model.vo.OrderVO;
 import com.yudi.ticket.model.vo.OrderVisitorVO;
 import com.yudi.ticket.model.vo.UserVisitorVO;
+import com.yudi.ticket.service.DashboardService;
 import com.yudi.ticket.service.OrderService;
 import com.yudi.ticket.service.OrderVisitorService;
 import com.yudi.ticket.service.ScenicStockService;
@@ -93,7 +96,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order>
     private ScenicStockService scenicStockService;
 
     @Resource
+    private DashboardService dashboardService;
+
+    @Resource
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Resource
+    private CommissionLogMapper commissionLogMapper;
 
     /**
      * 创建订单
@@ -252,6 +261,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order>
         this.updateById(order);
 
         log.info("订单支付成功 - 订单号: {}, 支付方式: {}", order.getOrderSn(), paymentMethod);
+        
+        // 清除控制台统计缓存
+        dashboardService.clearCache();
+        
         return true;
     }
 
@@ -345,6 +358,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order>
 
         if (result) {
             log.info("订单删除成功 - 订单号:{}", order.getOrderSn());
+            
+            // 清除控制台统计缓存（如果有已支付的订单被删除，虽然逻辑上不应该发生，但为了数据一致性）
+            dashboardService.clearCache();
 
             // 验证更新结果
             Order updatedOrder = this.getById(orderId);
@@ -575,10 +591,45 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order>
 
         this.updateById(order);
 
+        // Distribute Commission
+        if (order.getDistributorId() != null && order.getCommissionAmount() != null && order.getCommissionAmount().compareTo(BigDecimal.ZERO) > 0) {
+            User distributor = userMapper.selectById(order.getDistributorId());
+            if (distributor != null) {
+                // Update Wallet
+                BigDecimal currentBalance = distributor.getWalletBalance() != null ? distributor.getWalletBalance() : BigDecimal.ZERO;
+                BigDecimal newBalance = currentBalance.add(order.getCommissionAmount());
+                distributor.setWalletBalance(newBalance);
+                userMapper.updateById(distributor);
+
+                // Add Log
+                CommissionLog commLog = new CommissionLog();
+                commLog.setDistributorId(distributor.getId());
+                commLog.setOrderId(order.getId());
+                commLog.setOrderSn(order.getOrderSn());
+                
+                // Get Scenic Name
+                TicketProduct p = ticketProductMapper.selectById(order.getProductId());
+                if (p != null) {
+                    ScenicSpot s = scenicSpotMapper.selectById(p.getSpotId());
+                    if (s != null) commLog.setScenicName(s.getSpotName());
+                }
+
+                commLog.setProfitAmount(order.getCommissionAmount());
+                commLog.setBalanceAfter(newBalance);
+                commLog.setLogType(1); // Income
+                commLog.setLogRemark("门票销售佣金");
+                commLog.setCreateTime(LocalDateTime.now());
+                commissionLogMapper.insert(commLog);
+            }
+        }
+
         // 清除过期标记
         redisTemplate.delete("order:expire:" + order.getId());
 
         log.info("订单支付成功 - 订单号: {}", order.getOrderSn());
+        
+        // 清除控制台统计缓存
+        dashboardService.clearCache();
 
         // 返回完整的订单信息
         return getOrderDetail(order.getId(), userId);

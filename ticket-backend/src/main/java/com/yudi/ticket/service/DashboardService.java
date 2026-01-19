@@ -22,4 +22,9 @@ public interface DashboardService {
      * @return 收入统计数据
      */
     RevenueStatsVO getRevenueStats(Integer days);
+
+    /**
+     * 清除缓存
+     */
+    void clearCache();
 }

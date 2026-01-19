@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.Data;
 
@@ -39,6 +40,16 @@ public class User implements Serializable {
      * 用户头像
      */
     private String avatar;
+
+    /**
+     * 经销商钱包余额（仅分销商role=2有效）
+     */
+    private BigDecimal walletBalance;
+
+    /**
+     * 分销商等级: 1-金（提成0.3倍官网价）, 2-银（0.25倍）, 3-铜（0.2倍）, NULL-不适用
+     */
+    private Integer distributorLevel;
 
     /**
      * 角色: 0-管理员, 1-游客, 2-分销商
